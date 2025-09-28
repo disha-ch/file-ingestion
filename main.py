@@ -2,23 +2,18 @@
 """
 Main entrypoint for the SOP document ingestion and question-generation pipeline.
 
-This script orchestrates different phases of the pipeline depending on the day
-of the week or an explicit override via environment variables.
-
-Phases:
-    - Document retrieval from Veeva Vault
-    - Download of associated SOP files from S3
-    - Conversion, metadata extraction, and ingestion into DynamoDB
-    - LLM-powered question generation for knowledge base enrichment
+This script orchestrates pipeline execution in two modes:
+    - Incremental (Mon–Fri): Fetch and process only recent document updates.
+    - Initial Load (Sat–Sun): Perform a full load of all eligible documents.
 
 Environment Variables:
-    PIPELINE_PHASE: Optional. Override phase selection (values: "retrieve", "download", "generate").
+    PIPELINE_PHASE: Optional. Override phase selection ("retrieve", "download", "generate").
+    LOAD_TYPE: Optional. Force load type ("Incremental", "Load").
     ENV: Deployment environment (dev/test/prod).
 """
 
 import os
 import sys
-import logging
 from datetime import datetime
 
 from src.pipelines import retrieve_documents, download_documents, generate_questions
@@ -29,58 +24,64 @@ from src.utils import initialize_services
 logger = SingletonLogger().get_logger()
 
 
-def run_pipeline(phase: str) -> None:
+def run_pipeline(phase: str, load_type: str) -> None:
     """
     Dispatch the pipeline phase to the appropriate handler.
 
     Args:
-        phase (str): The pipeline phase to run. Valid values:
-            - "retrieve"
-            - "download"
-            - "generate"
+        phase (str): Pipeline phase. One of ["retrieve", "download", "generate"].
+        load_type (str): Load type. One of ["Incremental", "Load"].
     """
-    logger.info("Starting pipeline phase: %s", phase)
+    logger.info("Starting pipeline phase: %s (Load Type: %s)", phase, load_type)
 
     if phase == "retrieve":
-        retrieve_documents.retrieve_documents()
+        retrieve_documents.retrieve_documents(load_type)
     elif phase == "download":
-        download_documents.download_documents()
+        download_documents.download_documents(load_type)
     elif phase == "generate":
-        # In production this might iterate over new documents and call generate_questions
-        # For simplicity, we just log the trigger.
-        logger.info("Triggering question generation phase...")
-        # Example call:
+        logger.info("Triggering question generation (Load Type: %s)...", load_type)
+        # Example call (iterating over docs would be real logic):
         # generate_questions.generate_questions(folder_name, file_name)
     else:
         logger.error("Invalid pipeline phase: %s", phase)
         raise ValueError(f"Invalid pipeline phase: {phase}")
 
-    logger.info("Completed pipeline phase: %s", phase)
+    logger.info("Completed pipeline phase: %s (Load Type: %s)", phase, load_type)
+
+
+def select_load_type() -> str:
+    """
+    Determine whether to run Incremental or Initial Load based on the day of week.
+
+    Returns:
+        str: "Incremental" (Mon–Fri) or "Load" (Sat–Sun).
+    """
+    override = os.getenv("LOAD_TYPE")
+    if override:
+        return override.capitalize()
+
+    weekday = datetime.utcnow().weekday()
+    if weekday in range(0, 5):  # Monday–Friday
+        return "Incremental"
+    elif weekday in (5, 6):  # Saturday–Sunday
+        return "Load"
+    else:
+        raise ValueError("Unexpected weekday calculation")
 
 
 def select_phase() -> str:
     """
-    Select which pipeline phase to execute based on weekday or env override.
+    Determine which pipeline phase to run based on environment variable.
 
     Returns:
-        str: The selected phase.
+        str: "retrieve", "download", or "generate".
     """
     override_phase = os.getenv("PIPELINE_PHASE")
     if override_phase:
         return override_phase.lower()
 
-    weekday = datetime.utcnow().weekday()
-    # Example logic:
-    if weekday in (0, 3):  # Monday, Thursday
-        return "retrieve"
-    elif weekday in (1, 4):  # Tuesday, Friday
-        return "download"
-    elif weekday in (2, 5):  # Wednesday, Saturday
-        return "generate"
-    else:
-        # Sunday - maintenance or no run
-        logger.info("No pipeline scheduled on Sunday.")
-        sys.exit(0)
+    # Default phase when not overridden
+    return "retrieve"
 
 
 if __name__ == "__main__":
@@ -88,8 +89,11 @@ if __name__ == "__main__":
         logger.info("Initializing services...")
         initialize_services()
 
+        load_type = select_load_type()
         phase = select_phase()
-        run_pipeline(phase)
+
+        logger.info("Selected Load Type: %s | Phase: %s", load_type, phase)
+        run_pipeline(phase, load_type)
 
         logger.info("Pipeline execution completed successfully.")
 

@@ -21,8 +21,7 @@ The solution demonstrates how **cloud-native infrastructure** + **LLM-powered en
 
 ## Architecture
 
-```text
-azcdi-us-ops-sop-fileingest-datapipeline/
+file-ingestion/
 ├─ src/
 │  ├─ connectors/        # AWS + external system connectors
 │  ├─ exceptions/        # Custom exception classes
@@ -42,11 +41,18 @@ azcdi-us-ops-sop-fileingest-datapipeline/
 ├─ requirements.txt      # Python dependencies
 ├─ playbook.md           # Ops playbook
 └─ README.md             # This file
-```
 
 ---
 
-## ⚙️ How It Works
+Here is the visual flow of the entire pipeline --
+
+<img width="955" height="537" alt="Screenshot 2025-09-28 at 6 00 25 PM" src="https://github.com/user-attachments/assets/1ae6faf7-fcd9-49e9-9c2f-59633714cde8" />
+
+
+
+
+
+## How It Works
 
 1. **Document Download**
 

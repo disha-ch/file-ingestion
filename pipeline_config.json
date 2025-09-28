@@ -1,0 +1,18 @@
+{
+  "environment": "dev",
+  "sites": {
+    "SITE_A": {
+      "country": "US",
+      "business_areas": ["BA1", "BA3", "BA5"]
+    },
+    "SITE_B": {
+      "country": "IN",
+      "business_areas": ["BA2", "BA4"]
+    }
+  },
+  "pipeline": {
+    "execution_type": "Incremental",
+    "batch_size": 20,
+    "retry_limit": 2
+  }
+}
